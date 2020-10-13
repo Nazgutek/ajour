@@ -395,11 +395,6 @@ pub fn handle_message(ajour: &mut Ajour, message: Message) -> Result<Command<Mes
             let addons = ajour.addons.entry(flavor).or_default();
 
             if let Some(addon) = addons.iter().find(|a| a.primary_folder_id == id).cloned() {
-                let addon_directory = ajour
-                    .config
-                    .get_addon_directory_for_flavor(&flavor)
-                    .expect("has to have addon directory");
-
                 // Remove from local state.
                 addons.retain(|a| a.primary_folder_id != addon.primary_folder_id);
 
@@ -583,8 +578,12 @@ pub fn handle_message(ajour: &mut Ajour, message: Message) -> Result<Command<Mes
                     Ok(_) => {
                         addon.state = AddonState::Fingerprint;
 
+                        let mut version = None;
                         if let Some(package) = addon.relevant_release_package() {
-                            addon.set_version(package.version.clone());
+                            version = Some(package.version.clone());
+                        }
+                        if let Some(version) = version {
+                            addon.set_version(version);
                         }
 
                         let mut commands = vec![];
@@ -1050,22 +1049,20 @@ pub fn handle_message(ajour: &mut Ajour, message: Message) -> Result<Command<Mes
             }
 
             let addons = ajour.addons.entry(flavor).or_default();
-            addons.push(empty_addon.clone());
+            addons.push(empty_addon);
 
-            if let Some(addon_path) = ajour.config.get_addon_directory_for_flavor(&flavor) {
-                let command = match source {
-                    catalog::Source::Curse => Command::perform(
-                        curse_api::latest_addon(id, flavor),
-                        Message::CatalogInstallAddonFetched,
-                    ),
-                    catalog::Source::Tukui => Command::perform(
-                        tukui_api::latest_addon(id, flavor),
-                        Message::CatalogInstallAddonFetched,
-                    ),
-                };
+            let command = match source {
+                catalog::Source::Curse => Command::perform(
+                    curse_api::latest_addon(id, flavor),
+                    Message::CatalogInstallAddonFetched,
+                ),
+                catalog::Source::Tukui => Command::perform(
+                    tukui_api::latest_addon(id, flavor),
+                    Message::CatalogInstallAddonFetched,
+                ),
+            };
 
-                return Ok(command);
-            }
+            return Ok(command);
         }
         Message::Interaction(Interaction::CatalogCategorySelected(category)) => {
             log::debug!("Interaction::CatalogCategorySelected({})", &category);
